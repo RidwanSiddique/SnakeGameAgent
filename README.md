@@ -3,6 +3,11 @@
 ## Overview
 This project combines the classic Snake game, implemented in PyGame, with a machine learning agent built using TensorFlow. The goal is to demonstrate the capabilities of machine learning techniques in learning and mastering gameplay. The agent is trained to navigate the game environment, avoid obstacles, and maximize its score by eating food items.
 
+## Preview
+
+https://github.com/RidwanSiddique/SnakeGameAgent/assets/65805850/acdf8373-98e8-4940-b57a-69a6b54bc634
+
+
 ## Features
 - **Snake Game Implementation:** A complete Snake game built with PyGame for real-time gameplay.
 - **TensorFlow Agent:** A machine learning model designed to learn and play the Snake game autonomously.
