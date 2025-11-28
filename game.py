@@ -26,6 +26,7 @@ RED = (200, 0, 0)
 BLUE1 = (0, 0, 255)
 BLUE2 = (0, 100, 255)
 BLACK = (0, 0, 0)
+GRAY = (128, 128, 128)  # Color for obstacles
 
 # Game configuration
 BLOCK_SIZE = 20  # Size of each block in the game
@@ -34,22 +35,28 @@ SPEED = 40  # Game speed (frames per second)
 class SnakeGameAI:
     """
     Snake game environment for AI, designed for reinforcement learning.
+    Supports multiple difficulty levels.
     """
-    def __init__(self, width=640, height=480):
+    def __init__(self, width=640, height=480, level=1):
         """
         Initialize the game with the given width and height.
         :param width: Width of the game window.
         :param height: Height of the game window.
+        :param level: Game level (1 for blank, 2 for obstacles).
         """
         self.width = width
         self.height = height
+        self.level = level
 
         # Initialize the game display
         self.display = pygame.display.set_mode((self.width, self.height))
-        pygame.display.set_caption('Snake')
+        pygame.display.set_caption(f'Snake - Level {level}')
 
         # Initialize the game clock
         self.clock = pygame.time.Clock()
+
+        # Initialize obstacles
+        self.obstacles = []
 
         # Reset the game state
         self.reset()
@@ -68,20 +75,82 @@ class SnakeGameAI:
 
         self.score = 0  # Initial score
         self.food = None  # Food position
+        self.obstacles = []  # Clear obstacles
+
+        # Generate obstacles based on level
+        if self.level == 2:
+            self._generate_obstacles_level2()
+
         self._place_food()  # Place the first food item
         self.frame_iteration = 0  # Frame counter to detect stalls
+
+    def _generate_obstacles_level2(self):
+        """
+        Generate obstacles for Level 2.
+        Uses a fixed layout for consistent training across sessions.
+        """
+        # Fixed obstacle layout for consistent training
+        obstacles = [
+            # Large 3x3 block in top-left area
+            Point(100, 60), Point(120, 60), Point(140, 60),
+            Point(100, 80), Point(120, 80), Point(140, 80),
+            Point(100, 100), Point(120, 100), Point(140, 100),
+            
+            # Large 3x3 block in bottom-right area
+            Point(460, 320), Point(480, 320), Point(500, 320),
+            Point(460, 340), Point(480, 340), Point(500, 340),
+            Point(460, 360), Point(480, 360), Point(500, 360),
+            
+            # 2x2 blocks scattered
+            Point(200, 180), Point(220, 180),
+            Point(200, 200), Point(220, 200),
+            
+            Point(400, 140), Point(420, 140),
+            Point(400, 160), Point(420, 160),
+            
+            Point(300, 300), Point(320, 300),
+            Point(300, 320), Point(320, 320),
+            
+            # Single obstacles for navigation challenges
+            Point(160, 240), Point(260, 120), Point(380, 220),
+            Point(180, 320), Point(340, 180), Point(520, 200),
+            Point(140, 380), Point(480, 260), Point(300, 60)
+        ]
+        
+        # Filter obstacles that are too close to starting position
+        safe_obstacles = []
+        for obstacle in obstacles:
+            if (abs(obstacle.x - self.head.x) > 80 or abs(obstacle.y - self.head.y) > 80):
+                safe_obstacles.append(obstacle)
+        
+        self.obstacles = safe_obstacles
 
     def _place_food(self):
         """
         Place food at a random position on the game board.
+        Ensures food doesn't spawn on snake or obstacles.
         """
-        x = random.randint(0, (self.width - BLOCK_SIZE) // BLOCK_SIZE) * BLOCK_SIZE
-        y = random.randint(0, (self.height - BLOCK_SIZE) // BLOCK_SIZE) * BLOCK_SIZE
-        self.food = Point(x, y)
+        max_attempts = 100
+        attempts = 0
+        
+        while attempts < max_attempts:
+            x = random.randint(0, (self.width - BLOCK_SIZE) // BLOCK_SIZE) * BLOCK_SIZE
+            y = random.randint(0, (self.height - BLOCK_SIZE) // BLOCK_SIZE) * BLOCK_SIZE
+            self.food = Point(x, y)
 
-        # Ensure food does not spawn on the snake
-        if self.food in self.snake:
-            self._place_food()
+            # Ensure food does not spawn on the snake or obstacles
+            if self.food not in self.snake and self.food not in self.obstacles:
+                return
+            
+            attempts += 1
+        
+        # Fallback: if we can't find a spot after many attempts, place it anywhere not on snake
+        while True:
+            x = random.randint(0, (self.width - BLOCK_SIZE) // BLOCK_SIZE) * BLOCK_SIZE
+            y = random.randint(0, (self.height - BLOCK_SIZE) // BLOCK_SIZE) * BLOCK_SIZE
+            self.food = Point(x, y)
+            if self.food not in self.snake:
+                return
 
     def play_step(self, action):
         """
@@ -125,7 +194,7 @@ class SnakeGameAI:
 
     def is_collision(self, point=None):
         """
-        Check if the given point collides with the wall or the snake's body.
+        Check if the given point collides with the wall, obstacles, or the snake's body.
         :param point: The point to check for collisions (defaults to snake's head).
         :return: True if there is a collision, False otherwise.
         """
@@ -140,6 +209,10 @@ class SnakeGameAI:
         if point in self.snake[1:]:
             return True
 
+        # Check if the point collides with obstacles (Level 2)
+        if point in self.obstacles:
+            return True
+
         return False
 
     def _update_ui(self):
@@ -147,6 +220,10 @@ class SnakeGameAI:
         Update the game UI with the current state.
         """
         self.display.fill(BLACK)  # Fill the background with black
+
+        # Draw obstacles (Level 2)
+        for obstacle in self.obstacles:
+            pygame.draw.rect(self.display, GRAY, pygame.Rect(obstacle.x, obstacle.y, BLOCK_SIZE, BLOCK_SIZE))
 
         # Draw the snake
         for point in self.snake:
@@ -156,8 +233,8 @@ class SnakeGameAI:
         # Draw the food
         pygame.draw.rect(self.display, RED, pygame.Rect(self.food.x, self.food.y, BLOCK_SIZE, BLOCK_SIZE))
 
-        # Display the score
-        score_text = font.render(f"Score: {self.score}", True, WHITE)
+        # Display the score and level
+        score_text = font.render(f"Score: {self.score} | Level: {self.level}", True, WHITE)
         self.display.blit(score_text, [0, 0])
 
         # Refresh the display

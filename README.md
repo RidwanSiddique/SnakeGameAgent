@@ -11,6 +11,10 @@ https://github.com/RidwanSiddique/SnakeGameAgent/assets/65805850/acdf8373-98e8-4
 ## Features
 - **Dynamic Snake Game Implementation:** At the heart of this project is a fully functional Snake game developed using PyGame. This implementation captures all the quintessential elements of the original game, including the snake that navigates through the screen, grows in length with each piece of food consumed, and the game-over scenario triggered by colliding with the walls or itself. The game's fluid controls and real-time response mechanics provide a seamless and immersive gaming experience.
 
+- **Multi-Level Difficulty System:** The game now supports multiple levels to challenge the AI in increasingly complex environments:
+  - **Level 1:** Blank screen with only food (original difficulty) - perfect for initial training
+  - **Level 2:** Introduces obstacles on the screen, including vertical walls on the sides, horizontal barriers in the middle, and scattered random obstacles - mimics classic Snake game harder levels
+
 - **Advanced TensorFlow Agent:** The project's crown jewel is its TensorFlow-based machine learning agent. This agent is designed with a neural network architecture that enables it to perceive the game environment, make decisions, and learn from the outcomes of those decisions. Using reinforcement learning, the agent gradually optimizes its strategy to increase game longevity and maximize scores. This not only demonstrates the agent's ability to understand complex patterns and adapt its behavior but also showcases TensorFlow's versatility in developing sophisticated AI models.
 
 - **Comprehensive Training and Evaluation Framework:** A robust suite of tools and scripts accompanies the project to facilitate the training, testing, and evaluation of the machine learning agent. This framework allows for the monitoring of the agent's performance over multiple iterations, providing insights into its learning progression and areas for improvement. Through detailed analytics and visualizations, developers can tweak the model's parameters, refine its architecture, and experiment with different learning algorithms to enhance the agent's gameplay prowess.
@@ -41,6 +45,37 @@ To set up the project environment, follow these steps in your terminal:
 
 ### Running the Game
 Once the environment is set up and all dependencies are installed, you can start the game and the machine learning agent by running the main script. Ensure you are in the project's root directory and the `pygame_env` is activated.
+
+**Training on Level 1 (Blank Screen - Default):**
 ```shell
 python agent.py
+```
+
+**Training on Level 2 (With Obstacles):**
+```shell
+python agent.py 2
+```
+
+### Level Descriptions
+
+#### Level 1: Blank Screen
+- Simple environment with only food to eat
+- No obstacles to avoid
+- Ideal for initial agent training
+- Helps the agent learn basic navigation and food-seeking behavior
+
+#### Level 2: Obstacles
+- Vertical walls on both sides (with gaps near starting position)
+- Horizontal walls/barriers in the middle sections
+- Random obstacles scattered throughout the playfield
+- More challenging pathfinding required
+- Tests the agent's ability to navigate complex environments
+- Mimics classic Snake game harder difficulty levels
+
+### Game Mechanics
+- The snake moves in the specified direction (or continues in current direction if "straight" action is taken)
+- Snake grows when it eats food (red square)
+- Collision with walls, obstacles, or itself results in game over
+- The agent is trained using Deep Q-Learning with experience replay
+- Rewards: +10 for eating food, -10 for collision, -0 for each step
 
