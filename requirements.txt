@@ -1,0 +1,8 @@
+# pygame-ce is a drop-in replacement for pygame (`import pygame` is unchanged).
+# Used because upstream pygame ships no wheel for Python 3.14 and its source
+# build fails on macOS/clang.
+pygame-ce==2.5.8
+torch==2.13.0
+numpy==2.5.2
+matplotlib==3.11.1
+ipython==9.16.1
