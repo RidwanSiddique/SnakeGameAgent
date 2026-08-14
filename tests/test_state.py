@@ -143,3 +143,54 @@ def test_encoding_is_deterministic(levels):
         assert np.array_equal(get_state(a), get_state(b))
         a.step(Action.STRAIGHT)
         b.step(Action.STRAIGHT)
+
+
+# --- shortest-path features --------------------------------------------------
+
+
+def test_path_direction_agrees_with_bearing_on_an_open_board(levels):
+    """With nothing in the way, the route starts toward the food."""
+    engine = SnakeEngine(levels[1], seed=1)
+    state = get_state(engine)
+    assert state[24] == 1.0                      # food is reachable
+    assert state[21] + state[22] + state[23] == 1.0  # exactly one turn chosen
+
+
+def test_path_direction_routes_around_a_wall():
+    """Bearing points through the wall; the path feature must not.
+
+    A wall stands between the snake and the food with its only gap at the top,
+    so a correct shortest path starts by turning, not by going straight. The
+    wall sits clear of the spawn corridor, which the loader keeps free.
+    """
+    grid = Grid(cols=32, rows=24)
+    spawn = Point(grid.cols // 2, grid.rows // 2)
+    wall_x = spawn.x + 8
+    wall = [Point(wall_x, y) for y in range(grid.rows) if y != 0]
+    engine = _engine_with_obstacles(wall, grid)
+    _drive_to(engine, wall_x - 1)
+    engine.food = Point(wall_x + 3, engine.head.y)
+
+    state = get_state(engine)
+    assert state[11] == 1.0   # bearing says "food is to the right"
+    assert state[24] == 1.0   # a route does exist, over the top
+    assert state[21] == 0.0   # but it does not start by going straight
+    assert state[22] + state[23] == 1.0  # it starts with a turn
+
+
+def test_food_unreachable_is_flagged():
+    """No route to the food must set 24 low and leave 21-23 unset.
+
+    The obstacles are injected directly rather than loaded, because the level
+    loader deliberately refuses to build a board that seals off a region — which
+    is the very situation being tested here. It can still arise at runtime once
+    the snake's own body closes a gap.
+    """
+    engine = SnakeEngine(load_levels()[1], seed=1)
+    corner = {Point(2, y) for y in range(3)} | {Point(x, 2) for x in range(3)}
+    engine.obstacles = frozenset(corner)
+    engine.food = Point(0, 0)   # sealed behind the corner wall
+
+    state = get_state(engine)
+    assert state[24] == 0.0
+    assert state[21] == state[22] == state[23] == 0.0

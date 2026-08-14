@@ -15,20 +15,33 @@ this the difference between an agent that looks clever and one that looks broken
   14-16   free space straight / right / left              (new)
   17      tail reachable after moving straight            (new)
   18-20   normalised distance to obstruction s / r / l    (new)
+  21-23   shortest path to food turns s / r / l           (new)
+  24      food reachable at all                           (new)
+
+Features 10-13 give only a *bearing* to the food, which is enough on an open
+board and useless in a maze: the bearing points through the wall. Measured on
+the Corridors level, an agent with bearing alone never ate at all — episodes
+ended at the stall limit with score 0. Features 21-24 add the first step of an
+actual shortest path, which is what makes obstacle-dense boards — including the
+ones visitors draw in the web designer — playable.
 
 FEATURE_VERSION is recorded in every checkpoint. A model trained under one
 version cannot be loaded under another, because the input layer would silently
 mean something different.
 """
+from collections import deque
+
 import numpy as np
 
-from .grid import flood_fill
+from .grid import flood_fill, neighbours
 from .types import CLOCKWISE, DELTA, Direction, Point
 
-FEATURE_VERSION = 2
-FEATURE_COUNT = 21
+FEATURE_VERSION = 3
+FEATURE_COUNT = 25
 
 LOOKAHEAD_STEPS = 3
+
+PATH_SEARCH_BUDGET = None  # bounded by the board; see _path_direction
 
 
 def _relative_directions(direction: Direction) -> tuple[Direction, Direction, Direction]:
@@ -97,6 +110,71 @@ def _tail_reachable(engine, direction: Direction, blocked) -> bool:
     return tail in reached or len(reached) >= budget
 
 
+def _compute_path(engine, blocked) -> tuple[Direction | None, int | None]:
+    """Shortest route from head to food: (first step, length).
+
+    Breadth-first from the head, tagging every reached cell with the *initial*
+    move that leads to it, so the answer falls out when the food is reached
+    without reconstructing a parent chain. Returns (None, None) when no route
+    exists, which is itself worth telling the agent about.
+    """
+    food = engine.food
+    if food is None:
+        return None, None
+
+    cols, rows = engine.grid.cols, engine.grid.rows
+    head = engine.head
+
+    origin: dict[Point, Direction] = {}
+    distance: dict[Point, int] = {}
+    queue: deque[Point] = deque()
+
+    for direction in CLOCKWISE:
+        cell = _step(head, direction)
+        if 0 <= cell.x < cols and 0 <= cell.y < rows and cell not in blocked:
+            if cell == food:
+                return direction, 1
+            origin[cell] = direction
+            distance[cell] = 1
+            queue.append(cell)
+
+    # No artificial visit cap. A BFS frontier expands as a diamond, so capping it
+    # at a few hundred cells silently truncates the search well before the far
+    # side of the board and reports "unreachable" for food in plain sight. The
+    # search is already bounded by the cell count, which is the real limit.
+    while queue:
+        cell = queue.popleft()
+        for neighbour in neighbours(cell, cols, rows):
+            if neighbour in origin or neighbour in blocked or neighbour == head:
+                continue
+            if neighbour == food:
+                return origin[cell], distance[cell] + 1
+            origin[neighbour] = origin[cell]
+            distance[neighbour] = distance[cell] + 1
+            queue.append(neighbour)
+
+    return None, None
+
+
+def path_to_food(engine) -> tuple[Direction | None, int | None]:
+    """Cached `_compute_path` for the engine's current position.
+
+    Both the encoder and the trainer's reward shaping need this, and they run
+    against the same position on every step. Computing it twice would double the
+    dominant cost of training, so the result is memoised against a key that
+    changes whenever the board does.
+    """
+    key = (engine.steps, engine.head, engine.food, len(engine.snake))
+    cached = getattr(engine, "_path_cache", None)
+    if cached is not None and cached[0] == key:
+        return cached[1]
+
+    blocked = set(engine.obstacles) | set(engine.snake[:-1])
+    result = _compute_path(engine, blocked)
+    engine._path_cache = (key, result)
+    return result
+
+
 def get_state(engine) -> np.ndarray:
     """Encode the engine's current position as a float32 feature vector."""
     head = engine.head
@@ -110,6 +188,7 @@ def get_state(engine) -> np.ndarray:
     ray_cap = max(engine.grid.cols, engine.grid.rows)
 
     food = engine.food or head
+    path_direction, _ = path_to_food(engine)
 
     features = [
         # 0-2: immediate danger
@@ -146,6 +225,13 @@ def get_state(engine) -> np.ndarray:
         _distance_to_obstruction(engine, straight, ray_cap),
         _distance_to_obstruction(engine, right, ray_cap),
         _distance_to_obstruction(engine, left, ray_cap),
+
+        # 21-24: which way an actual route to the food starts, and whether one
+        # exists at all. Unlike the bearing at 10-13, this respects walls.
+        path_direction is straight,
+        path_direction is right,
+        path_direction is left,
+        path_direction is not None,
     ]
 
     return np.array(features, dtype=np.float32)
