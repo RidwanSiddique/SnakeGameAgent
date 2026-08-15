@@ -13,6 +13,7 @@ than quietly misinterpreting its inputs.
 called the network once per sample, so a batch of 1000 cost 1000 forward passes.
 It now costs one.
 """
+import base64
 import copy
 import json
 import time
@@ -104,22 +105,32 @@ class Linear_QNet(nn.Module):
     def export_weights(self, path: Path) -> Path:
         """Dump weights as JSON for the browser.
 
-        The web client runs this network as two matrix multiplies, so it needs
-        plain nested lists rather than a torch archive.
+        Tensors are base64-encoded float32 rather than nested number lists. JSON
+        writes each float as ~20 characters of text, which made this payload
+        157KB; base64 float32 is 4 bytes per weight and exact at the precision
+        the network actually uses, cutting it to roughly a quarter of that.
         """
+
+        def encode(tensor) -> str:
+            array = tensor.detach().to(torch.float32).contiguous().numpy()
+            return base64.b64encode(array.tobytes()).decode("ascii")
+
         payload = {
+            "format": "float32-base64",
             "input_size": self.input_size,
             "hidden_size": self.hidden_size,
             "output_size": self.output_size,
             "layers": [
                 {
-                    "weight": self.net[0].weight.detach().tolist(),
-                    "bias": self.net[0].bias.detach().tolist(),
+                    "shape": list(self.net[0].weight.shape),
+                    "weight": encode(self.net[0].weight),
+                    "bias": encode(self.net[0].bias),
                     "activation": "relu",
                 },
                 {
-                    "weight": self.net[2].weight.detach().tolist(),
-                    "bias": self.net[2].bias.detach().tolist(),
+                    "shape": list(self.net[2].weight.shape),
+                    "weight": encode(self.net[2].weight),
+                    "bias": encode(self.net[2].bias),
                     "activation": "linear",
                 },
             ],
