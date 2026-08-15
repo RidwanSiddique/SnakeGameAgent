@@ -26,11 +26,34 @@ is smaller than most hero images.
 
 Point Vercel at the repo and set **Root Directory** to `web`.
 
-The app imports `shared/levels.json` from outside `web/`, which is deliberate:
-level geometry has one definition shared with the Python trainer rather than a
-copy that can drift. `next.config.mjs` sets `outputFileTracingRoot` to the repo
-root so that file is included in the deployment bundle. If you move the app,
-that setting has to move with it.
+> **The one setting that will break your build.** Directly beneath the Root
+> Directory field, Vercel shows a checkbox:
+>
+> **"Include files outside of the Root Directory in the Build Step"** — this
+> must be **ON**.
+>
+> The app imports `shared/levels.json` from outside `web/`, which is deliberate:
+> level geometry has one definition shared with the Python trainer rather than a
+> copy that can drift. With that checkbox off, Vercel clones only `web/` and the
+> build fails with:
+>
+> ```text
+> Module not found: Can't resolve '../../../shared/levels.json'
+> Build failed because of webpack errors
+> ```
+>
+> This is reproducible locally: copy `web/` somewhere on its own and run
+> `npx next build`.
+
+Two separate mechanisms are involved and both are needed:
+
+- the checkbox above puts `shared/` on disk at **build** time, for module
+  resolution
+- `outputFileTracingRoot` in `next.config.mjs` includes `shared/levels.json` in
+  the serverless bundle at **run** time, for the API routes and the dynamic
+  gallery and leaderboard pages
+
+If you ever move the app out of `web/`, both have to move with it.
 
 ## 3. Attach Postgres (optional)
 
