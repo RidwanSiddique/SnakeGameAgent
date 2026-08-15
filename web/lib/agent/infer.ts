@@ -108,8 +108,25 @@ export class Agent {
   }
 }
 
-export async function loadAgent(url = '/agent/weights.json'): Promise<Agent> {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`could not load agent weights (${response.status})`);
-  return new Agent((await response.json()) as Weights);
+// Memoised per URL. The home page runs five boards at once, and each would
+// otherwise fetch, decode and hold its own copy of the weights. The network is
+// stateless, so one instance serves every board.
+const pending = new Map<string, Promise<Agent>>();
+
+export function loadAgent(url = '/agent/weights.json'): Promise<Agent> {
+  const existing = pending.get(url);
+  if (existing) return existing;
+
+  const request = fetch(url)
+    .then(async (response) => {
+      if (!response.ok) throw new Error(`could not load agent weights (${response.status})`);
+      return new Agent((await response.json()) as Weights);
+    })
+    .catch((cause) => {
+      pending.delete(url); // let a later mount retry rather than cache the failure
+      throw cause;
+    });
+
+  pending.set(url, request);
+  return request;
 }

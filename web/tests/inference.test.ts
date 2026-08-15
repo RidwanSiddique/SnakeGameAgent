@@ -69,3 +69,52 @@ test('chosen action matches PyTorch argmax on every sample', () => {
     assert.equal(argmax(got), argmax(sample.q), `action disagreement at sample ${index}`);
   }
 });
+
+test('agent weights are fetched and decoded once, not per board', () => {
+  // The home page mounts five boards. Each would otherwise fetch and decode its
+  // own copy of the network, so loadAgent memoises per URL.
+  const originalFetch = globalThis.fetch;
+  let fetches = 0;
+
+  globalThis.fetch = (async () => {
+    fetches += 1;
+    return { ok: true, json: async () => weights } as unknown as Response;
+  }) as typeof fetch;
+
+  return (async () => {
+    const { loadAgent } = await import('../lib/agent/infer.ts');
+    const url = '/agent/weights.json?memo-test';
+    const [a, b, c] = await Promise.all([loadAgent(url), loadAgent(url), loadAgent(url)]);
+    const d = await loadAgent(url);
+
+    globalThis.fetch = originalFetch;
+
+    assert.equal(fetches, 1, 'weights should be fetched once for repeated callers');
+    assert.equal(a, b);
+    assert.equal(b, c);
+    assert.equal(c, d, 'a later mount should reuse the resolved agent');
+  })();
+});
+
+test('a failed weights load is not cached', () => {
+  const originalFetch = globalThis.fetch;
+  let attempts = 0;
+
+  globalThis.fetch = (async () => {
+    attempts += 1;
+    if (attempts === 1) return { ok: false, status: 503 } as unknown as Response;
+    return { ok: true, json: async () => weights } as unknown as Response;
+  }) as typeof fetch;
+
+  return (async () => {
+    const { loadAgent } = await import('../lib/agent/infer.ts');
+    const url = '/agent/weights.json?retry-test';
+
+    await assert.rejects(() => loadAgent(url), /could not load agent weights/);
+    const recovered = await loadAgent(url);
+
+    globalThis.fetch = originalFetch;
+    assert.ok(recovered, 'a retry after a failure should succeed rather than replay the error');
+    assert.equal(attempts, 2);
+  })();
+});

@@ -323,23 +323,68 @@ td {
   padding: 0;
   margin: calc(var(--cell) * 1.5) 0 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(236px, 1fr));
   gap: var(--cell);
 }
 
 .level-card {
-  padding: calc(var(--cell) * 0.9);
+  padding: calc(var(--cell) * 0.7);
+  display: flex;
+  flex-direction: column;
+}
+
+/* The board sits on the darker game ground so the card reads as a window onto
+   the level rather than a picture of one. */
+.level-card-board {
+  background: #0d1017;
+  border: 1px solid var(--lattice);
+  border-radius: 2px;
+  padding: 3px;
+  margin-bottom: 0.85rem;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+}
+
+.level-card-board canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+.level-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.level-card-score {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+  line-height: 1;
 }
 
 .level-card h3 {
   font-size: 17px;
-  margin: 0.35rem 0 0.6rem;
+  margin: 0.3rem 0 0.5rem;
 }
 
 .level-note {
   font-size: 12px;
   margin: 0;
   line-height: 1.5;
+  flex: 1;
+}
+
+.level-card-best {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin: 0.9rem 0 0;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--lattice);
 }
 
 @media (max-width: 900px) {

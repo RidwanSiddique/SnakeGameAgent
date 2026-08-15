@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Masthead } from './Masthead';
 import { AgentDemo } from '../components/AgentDemo';
-import { LEVEL_LIST } from '../lib/engine/levelData';
+import { LevelShowcase } from '../components/LevelShowcase';
 
 export default function Home() {
   return (
@@ -43,19 +43,7 @@ export default function Home() {
           learn obstacles as a general skill rather than memorise a map — which is the only reason
           it stands a chance on a board you draw yourself.
         </p>
-        <ol className="level-list">
-          {LEVEL_LIST.map((level) => (
-            <li key={level.id} className="panel level-card">
-              <p className="stat-label">Level {level.id}</p>
-              <h3>{level.name}</h3>
-              <p className="muted level-note">
-                {level.obstacles.kind === 'procedural'
-                  ? 'Redrawn from the seed every game, so it is never the same board twice.'
-                  : 'A fixed layout, identical on every attempt.'}
-              </p>
-            </li>
-          ))}
-        </ol>
+        <LevelShowcase />
       </section>
     </main>
   );
