@@ -10,7 +10,7 @@ from ..core.engine import SnakeEngine
 from ..core.levels import load_levels
 from ..core.rng import Rng
 from ..core.state import FEATURE_VERSION
-from .agent import Agent
+from .agent import REPLAY_EVERY, Agent
 from .curriculum import Curriculum
 from .evaluate import evaluate, summarise
 
@@ -42,6 +42,7 @@ def train(
     rng = Rng(seed)
 
     best_score = 0
+    total_steps = 0
     recent = deque(maxlen=RECENT_WINDOW)
     seen_levels = set()
     started = time.perf_counter()
@@ -64,15 +65,17 @@ def train(
             reward = agent.reward_for(engine, result)
             next_state = agent.get_state(engine)
 
-            agent.train_short_memory(state, action, reward, next_state, result.died)
             agent.remember(state, action, reward, next_state, result.died)
             state = next_state
+
+            total_steps += 1
+            if total_steps % REPLAY_EVERY == 0:
+                agent.replay()
 
             if result.died:
                 break
 
         agent.n_games += 1
-        agent.train_long_memory()
         recent.append(engine.score)
         best_score = max(best_score, engine.score)
 
@@ -93,7 +96,9 @@ def train(
             )
 
         if episode % EVAL_EVERY == 0:
-            reports = evaluate(agent, levels, episodes=10)
+            # 20 rather than 10: checkpoint selection on a noisy sample partly
+            # selects for luck, and a falsely-high peak is never beaten again.
+            reports = evaluate(agent, levels, episodes=20)
             overall = sum(report.mean for report in reports) / len(reports)
             eval_history.append((episode, overall))
 

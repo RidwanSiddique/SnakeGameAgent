@@ -16,15 +16,26 @@ from ..core.types import Action
 from .model import Checkpoint, Linear_QNet, QTrainer
 
 MAX_MEMORY = 100_000
-BATCH_SIZE = 1000
+BATCH_SIZE = 64
 LEARNING_RATE = 0.001
 HIDDEN_SIZE = 256
 GAMMA = 0.9
 
-# Exploration decays from EPS_START to EPS_END over EPS_DECAY_GAMES episodes.
+# Learn from a sampled minibatch every REPLAY_EVERY steps, once WARMUP_STEPS of
+# experience exist. The original structure ran a gradient step on a *single*
+# transition every step — over a thousand batch-of-one updates per episode — and
+# measurably stopped improving after ~250 episodes while evaluation scores swung
+# between 19 and 53. Sampled minibatches decorrelate consecutive frames, which is
+# the entire point of a replay buffer.
+REPLAY_EVERY = 4
+WARMUP_STEPS = 2_000
+
+# Exploration decays from EPS_START to EPS_END over EPS_DECAY_GAMES episodes. The
+# floor stays off zero: with four levels sharing one network, a purely greedy
+# agent stops discovering anything new about the levels it currently plays worst.
 EPS_START = 0.90
-EPS_END = 0.02
-EPS_DECAY_GAMES = 400
+EPS_END = 0.05
+EPS_DECAY_GAMES = 1_500
 
 # Reward terms. Eating and dying dominate; the distance terms only break ties so
 # the agent does not wander early in training while it has no idea where food is.
@@ -116,17 +127,15 @@ class Agent:
     def remember(self, state, action: Action, reward, next_state, done) -> None:
         self.memory.append((state, action.value, reward, next_state, done))
 
-    def train_short_memory(self, state, action: Action, reward, next_state, done):
-        return self.trainer.train_step(state, action.value, reward, next_state, done)
+    def replay(self, batch_size: int = BATCH_SIZE):
+        """Train on a minibatch sampled from replay memory.
 
-    def train_long_memory(self):
-        if not self.memory:
+        Returns None until WARMUP_STEPS of experience exist, so early updates are
+        not dominated by the handful of transitions collected so far.
+        """
+        if len(self.memory) < WARMUP_STEPS:
             return None
-        batch = (
-            random.sample(self.memory, BATCH_SIZE)
-            if len(self.memory) > BATCH_SIZE
-            else list(self.memory)
-        )
+        batch = random.sample(self.memory, min(batch_size, len(self.memory)))
         states, actions, rewards, next_states, dones = zip(*batch)
         return self.trainer.train_step(
             np.array(states), actions, rewards, np.array(next_states), dones
