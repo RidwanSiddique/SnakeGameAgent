@@ -46,6 +46,10 @@ def train(
     seen_levels = set()
     started = time.perf_counter()
 
+    best_name = checkpoint_name.replace(".pth", "_best.pth")
+    best_eval, best_episode = float("-inf"), 0
+    eval_history: list[tuple[int, float]] = []
+
     for episode in range(1, episodes + 1):
         level_id = curriculum.sample(agent.n_games, rng)
         seen_levels.add(level_id)
@@ -88,10 +92,26 @@ def train(
                 checkpoint_name,
             )
 
-        if not quiet and episode % EVAL_EVERY == 0:
-            print(f"\n-- evaluation at episode {episode} (greedy, fixed seeds) --")
-            print(summarise(evaluate(agent, levels, episodes=10)))
-            print()
+        if episode % EVAL_EVERY == 0:
+            reports = evaluate(agent, levels, episodes=10)
+            overall = sum(report.mean for report in reports) / len(reports)
+            eval_history.append((episode, overall))
+
+            # Keep the best-evaluating weights, not the most recent ones. Q-learning
+            # can collapse late in a run — an earlier version of this loop saved only
+            # on a schedule and shipped a model scoring 34 after the same run had
+            # already reached 83 — so the peak has to be captured when it happens.
+            if overall > best_eval:
+                best_eval, best_episode = overall, episode
+                agent.model.save(agent.checkpoint(seen_levels, best_score, overall), best_name)
+                marker = f"  <- new best, saved to {best_name}"
+            else:
+                marker = f"  (best {best_eval:.2f} @ ep {best_episode})"
+
+            if not quiet:
+                print(f"\n-- evaluation at episode {episode} (greedy, fixed seeds) --")
+                print(summarise(reports))
+                print(f"overall {overall:.2f}{marker}\n")
 
     meta = agent.checkpoint(seen_levels, best_score, sum(recent) / len(recent) if recent else 0.0)
     path = agent.model.save(meta, checkpoint_name)
@@ -99,9 +119,29 @@ def train(
     if not quiet:
         elapsed = time.perf_counter() - started
         print(f"\ntrained {episodes} episodes in {elapsed:.1f}s ({episodes/elapsed:.1f} ep/s)")
-        print(f"saved {path.name}: {meta.describe()}")
-        print(f"\n-- final evaluation --")
-        print(summarise(evaluate(agent, levels)))
+        print(f"saved final weights to {path.name}: {meta.describe()}")
+
+        final_reports = evaluate(agent, levels)
+        final_overall = sum(report.mean for report in final_reports) / len(final_reports)
+        print("\n-- final weights --")
+        print(summarise(final_reports))
+
+        # A run shorter than EVAL_EVERY never reaches a periodic evaluation, which
+        # would otherwise leave no best checkpoint at all.
+        if final_overall > best_eval:
+            best_eval, best_episode = final_overall, episodes
+            agent.model.save(agent.checkpoint(seen_levels, best_score, final_overall), best_name)
+
+        print(f"\n-- best weights ({best_name}, overall {best_eval:.2f} at episode {best_episode}) --")
+        if final_overall < best_eval:
+            print(
+                f"final weights score {final_overall:.2f}, below the peak of {best_eval:.2f}. "
+                f"Use {best_name} — this is the late-training collapse the target "
+                "network is meant to limit, not a reason to trust the last epoch."
+            )
+        if eval_history:
+            trail = "  ".join(f"{ep}:{score:.0f}" for ep, score in eval_history[-8:])
+            print(f"eval trail  {trail}")
 
     return agent, meta
 

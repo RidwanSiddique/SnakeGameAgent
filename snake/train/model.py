@@ -13,6 +13,7 @@ than quietly misinterpreting its inputs.
 called the network once per sample, so a batch of 1000 cost 1000 forward passes.
 It now costs one.
 """
+import copy
 import json
 import time
 from dataclasses import asdict, dataclass, field
@@ -129,13 +130,34 @@ class Linear_QNet(nn.Module):
 
 
 class QTrainer:
-    """Deep Q-learning update."""
+    """Deep Q-learning update with a target network.
 
-    def __init__(self, model: Linear_QNet, lr: float, gamma: float):
+    Bootstrapping the Bellman target off the network currently being updated
+    makes the target move with every gradient step, and the resulting feedback
+    loop can collapse a policy that was working. That is not hypothetical here: a
+    3000-episode run peaked at an overall evaluation mean of 83.25 and fell to
+    34.01 within the next 250 episodes.
+
+    A target network is the standard remedy — targets come from a frozen copy
+    that is refreshed periodically, so they hold still long enough to learn
+    against. Gradients are clipped for the same reason.
+    """
+
+    def __init__(self, model: Linear_QNet, lr: float, gamma: float, target_sync: int = 1000):
         self.model = model
         self.gamma = gamma
         self.optimizer = optim.Adam(model.parameters(), lr=lr)
-        self.criterion = nn.MSELoss()
+        self.criterion = nn.SmoothL1Loss()  # less explosive than MSE on outliers
+
+        self.target_sync = target_sync
+        self.target = copy.deepcopy(model)
+        self.target.load_state_dict(model.state_dict())
+        for parameter in self.target.parameters():
+            parameter.requires_grad_(False)
+        self._updates = 0
+
+    def sync_target(self) -> None:
+        self.target.load_state_dict(self.model.state_dict())
 
     def train_step(self, states, actions, rewards, next_states, dones):
         """One gradient step over a batch (or a single transition).
@@ -159,14 +181,20 @@ class QTrainer:
         # Q(s, a) for the actions actually taken.
         predicted = self.model(states).gather(1, actions.unsqueeze(1)).squeeze(1)
 
-        # Bellman target. No gradient flows through the bootstrap, and terminal
-        # states take their reward alone.
+        # Bellman target, taken from the frozen target network so it does not
+        # shift underneath the update. Terminal states take their reward alone.
         with torch.no_grad():
-            best_next = self.model(next_states).max(dim=1).values
+            best_next = self.target(next_states).max(dim=1).values
             target = rewards + self.gamma * best_next * (~dones)
 
         self.optimizer.zero_grad()
         loss = self.criterion(predicted, target)
         loss.backward()
+        nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
         self.optimizer.step()
+
+        self._updates += 1
+        if self._updates % self.target_sync == 0:
+            self.sync_target()
+
         return loss.item()
