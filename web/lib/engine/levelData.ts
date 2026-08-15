@@ -5,7 +5,8 @@
  * than a copy. A duplicate would drift, and a drifted board means the agent is
  * playing a level it was not trained on.
  */
-import levelFile from '../../../shared/levels.json';
+// Node's ESM loader requires the type attribute; webpack/Next accept it too.
+import levelFile from '../../../shared/levels.json' with { type: 'json' };
 import { loadLevels, type Level, type LevelFile } from './levels.ts';
 
 export const LEVELS: Map<number, Level> = loadLevels(levelFile as unknown as LevelFile);

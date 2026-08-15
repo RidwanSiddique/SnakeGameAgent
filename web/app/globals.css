@@ -480,3 +480,70 @@ select {
 .notice-outcome {
   border-left: 2px solid var(--agent);
 }
+
+/* --- leaderboard & gallery ------------------------------------------------ */
+
+.leaderboards,
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--cell);
+  margin: calc(var(--cell) * 1.5) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.board-scores,
+.gallery-card {
+  padding: calc(var(--cell) * 0.9);
+}
+
+.board-scores h2,
+.gallery-card h2 {
+  font-size: 18px;
+  margin-bottom: 0.75rem;
+}
+
+.empty {
+  font-size: 13px;
+  margin: 0;
+}
+
+.byline {
+  font-size: 12px;
+  margin: -0.4rem 0 0.9rem;
+}
+
+.gallery-card .readout {
+  margin-bottom: 1rem;
+}
+
+.gallery-card .readout dd {
+  font-size: 18px;
+}
+
+.submit-row {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+input {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--panel-raised);
+  color: var(--text);
+  border: 1px solid var(--edge);
+  border-radius: 2px;
+  padding: 0.55rem 0.7rem;
+}
+
+.submit-note {
+  margin: 0.75rem 0 0;
+  font-size: 12px;
+}
+
+.submit-error {
+  color: var(--food);
+}

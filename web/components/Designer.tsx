@@ -23,6 +23,9 @@ export function Designer() {
   const [version, setVersion] = useState(0);
   const [outcome, setOutcome] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [bestAgentScore, setBestAgentScore] = useState<number | null>(null);
+  const [publishState, setPublishState] = useState<'idle' | 'sending' | 'done' | string>('idle');
+  const [boardName, setBoardName] = useState('');
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const painting = useRef<'add' | 'remove' | null>(null);
@@ -148,6 +151,9 @@ export function Designer() {
     if (!engine || !agent) return;
     if (engine.step(agent.act(engine)).died) {
       setOutcome(`The agent scored ${engine.score} before it crashed.`);
+      setBestAgentScore((previous) =>
+        previous === null ? engine.score : Math.min(previous, engine.score),
+      );
       setMode('edit');
       return;
     }
@@ -184,6 +190,25 @@ export function Designer() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const publish = async () => {
+    setPublishState('sending');
+    try {
+      const code = encodeBoard(
+        [...cells].map((key) => ({ x: key % GRID.cols, y: Math.floor(key / GRID.cols) }) as Point),
+        GRID,
+      );
+      const response = await fetch('/api/boards', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ code, name: boardName, author: 'anonymous', agentScore: bestAgentScore }),
+      });
+      const body = await response.json();
+      setPublishState(response.ok ? 'done' : (body.detail ?? body.error ?? 'Could not publish that board.'));
+    } catch {
+      setPublishState('Could not reach the gallery.');
+    }
+  };
+
   return (
     <div className="designer">
       <div className="race-controls panel">
@@ -214,6 +239,31 @@ export function Designer() {
         <p className="notice notice-outcome" role="status">
           {outcome}
         </p>
+      )}
+
+      {bestAgentScore !== null && publishState !== 'done' && (
+        <form
+          className="submit-row"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void publish();
+          }}
+        >
+          <input
+            value={boardName}
+            onChange={(event) => setBoardName(event.target.value)}
+            placeholder="Name this board"
+            maxLength={40}
+            aria-label="Name this board"
+          />
+          <button type="submit" disabled={publishState === 'sending'}>
+            {publishState === 'sending' ? 'Publishing…' : 'Publish to gallery'}
+          </button>
+        </form>
+      )}
+      {publishState === 'done' && <p className="muted submit-note">Published to the gallery.</p>}
+      {typeof publishState === 'string' && !['idle', 'sending', 'done'].includes(publishState) && (
+        <p className="submit-note submit-error">{publishState}</p>
       )}
 
       <div className="board-frame designer-frame">

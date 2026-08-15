@@ -7,6 +7,7 @@ import { Agent, loadAgent } from '../lib/agent/infer.ts';
 import { useGameLoop } from '../lib/ui/useGameLoop.ts';
 import { Board } from './Board.tsx';
 import { Action, CLOCKWISE, Direction } from '../lib/engine/types.ts';
+import { encodeActions } from '../lib/replay.ts';
 
 const SPEED = 9; // steps per second, identical for both racers
 
@@ -50,6 +51,11 @@ export function Race() {
   const machine = useMemo(() => new SnakeEngine(level, seed), [level, seed]);
 
   const pending = useRef<Direction | null>(null);
+  // Every move the human makes, so the server can replay the run rather than
+  // take the score on trust.
+  const moves = useRef<number[]>([]);
+  const [submission, setSubmission] = useState<'idle' | 'sending' | 'done' | string>('idle');
+  const [player, setPlayer] = useState('');
 
   useEffect(() => {
     loadAgent().then(setAgent).catch(() => setAgent(null));
@@ -81,6 +87,7 @@ export function Race() {
     const humanAction = desired ? actionFor(human.direction, desired) ?? Action.STRAIGHT : Action.STRAIGHT;
     pending.current = null;
 
+    moves.current.push(humanAction);
     const humanResult = human.step(humanAction);
     const agentResult = agent ? machine.step(agent.act(machine)) : { died: false };
 
@@ -99,15 +106,40 @@ export function Race() {
   useGameLoop(tick, SPEED, phase === 'running');
 
   const start = () => {
+    moves.current = [];
+    setSubmission('idle');
     setResult(null);
     setCountdown(3);
     setPhase('counting');
   };
 
   const rematch = (newSeed = Math.floor(Math.random() * 1e9)) => {
+    moves.current = [];
+    setSubmission('idle');
     setSeed(newSeed);
     setResult(null);
     setPhase('ready');
+  };
+
+  const submit = async () => {
+    setSubmission('sending');
+    try {
+      const response = await fetch('/api/scores', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          levelId,
+          seed,
+          moves: encodeActions(moves.current),
+          score: result?.human ?? 0,
+          player,
+        }),
+      });
+      const body = await response.json();
+      setSubmission(response.ok ? 'done' : (body.detail ?? body.error ?? 'Could not save that run.'));
+    } catch {
+      setSubmission('Could not reach the leaderboard.');
+    }
   };
 
   const verdict = result
@@ -170,6 +202,33 @@ export function Race() {
             <span className="tag-human">{result.human}</span> to{' '}
             <span className="tag-agent">{result.agent}</span>. Same board, same food order.
           </p>
+
+          {result.human > 0 && submission !== 'done' && (
+            <form
+              className="submit-row"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void submit();
+              }}
+            >
+              <input
+                value={player}
+                onChange={(event) => setPlayer(event.target.value)}
+                placeholder="Your name"
+                maxLength={24}
+                aria-label="Your name for the leaderboard"
+              />
+              <button type="submit" disabled={submission === 'sending'}>
+                {submission === 'sending' ? 'Checking run…' : 'Post to leaderboard'}
+              </button>
+            </form>
+          )}
+          {submission === 'done' && (
+            <p className="muted submit-note">Run verified and posted.</p>
+          )}
+          {typeof submission === 'string' && !['idle', 'sending', 'done'].includes(submission) && (
+            <p className="submit-note submit-error">{submission}</p>
+          )}
         </div>
       )}
 
