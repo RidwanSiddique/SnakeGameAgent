@@ -1,0 +1,482 @@
+/*
+ * Design system.
+ *
+ * The organising idea is that the grid is the subject: every board, obstacle,
+ * flood fill and path in this project lives on a 32x24 lattice, so the page
+ * itself is ruled by that same lattice rather than a generic 12-column layout.
+ *
+ * Colour carries information rather than mood. Amber is always the human and
+ * blue is always the agent, on every board, chart and table on the site, so in
+ * race mode you never have to read a label to know which snake is yours. Blue
+ * and red match the pygame renderer, so the desktop trainer and the site read as
+ * one product.
+ */
+
+:root {
+  --cell: 22px;
+
+  --ink: #0a0c12;
+  --panel: #11151e;
+  --panel-raised: #161c28;
+  --lattice: #171e2b;
+  --edge: #232c3d;
+
+  --text: #e6eaf2;
+  --muted: #8a93a6;
+  --faint: #5b6479;
+
+  --agent: #3884ff;
+  --agent-dim: #1d4894;
+  --human: #f5a524;
+  --human-dim: #8a5c11;
+  --food: #ec4858;
+  --wall: #4e5466;
+
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--ink);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+
+  /* The lattice. Same cell size as the board, so the page and the game share
+     one coordinate system rather than merely resembling each other. */
+  background-image:
+    linear-gradient(to right, var(--lattice) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--lattice) 1px, transparent 1px);
+  background-size: var(--cell) var(--cell);
+  background-position: center top;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+  line-height: 1.05;
+}
+
+h1 {
+  font-size: clamp(2.4rem, 6vw, 4.2rem);
+}
+
+h2 {
+  font-size: clamp(1.4rem, 3vw, 2rem);
+}
+
+a {
+  color: inherit;
+}
+
+/* --- shared furniture ----------------------------------------------------- */
+
+.shell {
+  max-width: calc(var(--cell) * 46);
+  margin: 0 auto;
+  padding: calc(var(--cell) * 1.5) var(--cell) calc(var(--cell) * 3);
+}
+
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin: 0 0 0.75rem;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 2px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.lede {
+  color: var(--muted);
+  font-size: 15px;
+  max-width: 58ch;
+  margin: 1.25rem 0 0;
+}
+
+/* --- navigation ----------------------------------------------------------- */
+
+.masthead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--edge);
+  padding-bottom: calc(var(--cell) * 0.6);
+  margin-bottom: calc(var(--cell) * 1.5);
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+}
+
+.wordmark span {
+  color: var(--agent);
+}
+
+.nav {
+  display: flex;
+  gap: 1.25rem;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nav a {
+  color: var(--muted);
+  text-decoration: none;
+  padding-bottom: 2px;
+  border-bottom: 1px solid transparent;
+}
+
+.nav a:hover,
+.nav a:focus-visible {
+  color: var(--text);
+  border-bottom-color: var(--agent);
+}
+
+/* --- controls ------------------------------------------------------------- */
+
+button,
+.button {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text);
+  background: var(--panel-raised);
+  border: 1px solid var(--edge);
+  border-radius: 2px;
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+button:hover,
+.button:hover {
+  border-color: var(--agent);
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+button.primary {
+  background: var(--agent);
+  border-color: var(--agent);
+  color: #05070c;
+  font-weight: 600;
+}
+
+button.primary:hover {
+  background: #4d92ff;
+}
+
+:focus-visible {
+  outline: 2px solid var(--agent);
+  outline-offset: 2px;
+}
+
+/* --- data ----------------------------------------------------------------- */
+
+.readout {
+  display: flex;
+  gap: calc(var(--cell) * 1.2);
+  flex-wrap: wrap;
+}
+
+.readout div {
+  min-width: 0;
+}
+
+.readout dt,
+.stat-label {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin: 0;
+}
+
+.readout dd,
+.stat-value {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  margin: 0.15rem 0 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+th {
+  text-align: left;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--faint);
+  font-weight: 400;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--edge);
+}
+
+td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--lattice);
+}
+
+.tag-agent {
+  color: var(--agent);
+}
+
+.tag-human {
+  color: var(--human);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* --- home ----------------------------------------------------------------- */
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: calc(var(--cell) * 2);
+  align-items: center;
+  padding-bottom: calc(var(--cell) * 3);
+  border-bottom: 1px solid var(--edge);
+}
+
+.hero-copy h1 {
+  margin-bottom: 0;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: calc(var(--cell) * 1.5);
+  flex-wrap: wrap;
+}
+
+.button.primary-link {
+  background: var(--agent);
+  border-color: var(--agent);
+  color: #05070c;
+  font-weight: 600;
+}
+
+.button.primary-link:hover {
+  background: #4d92ff;
+}
+
+.hero-board {
+  padding: calc(var(--cell) * 0.6);
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 2px;
+}
+
+.levels {
+  padding-top: calc(var(--cell) * 2);
+}
+
+.level-list {
+  list-style: none;
+  padding: 0;
+  margin: calc(var(--cell) * 1.5) 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--cell);
+}
+
+.level-card {
+  padding: calc(var(--cell) * 0.9);
+}
+
+.level-card h3 {
+  font-size: 17px;
+  margin: 0.35rem 0 0.6rem;
+}
+
+.level-note {
+  font-size: 12px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hero-board {
+    overflow-x: auto;
+  }
+}
+
+/* --- race ----------------------------------------------------------------- */
+
+.race {
+  margin-top: calc(var(--cell) * 1.5);
+}
+
+.race-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: calc(var(--cell) * 1.2);
+  flex-wrap: wrap;
+  padding: calc(var(--cell) * 0.8);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+select {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--panel-raised);
+  color: var(--text);
+  border: 1px solid var(--edge);
+  border-radius: 2px;
+  padding: 0.5rem 0.6rem;
+}
+
+.seed {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+}
+
+.race-boards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--cell);
+  margin-top: var(--cell);
+}
+
+.racer {
+  margin: 0;
+}
+
+.racer figcaption {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 0.5rem;
+}
+
+.score {
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+}
+
+.board-frame {
+  position: relative;
+  padding: calc(var(--cell) * 0.4);
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 2px;
+  overflow-x: auto;
+}
+
+.countdown {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: 64px;
+  font-weight: 700;
+  color: var(--text);
+  background: rgba(10, 12, 18, 0.72);
+}
+
+.verdict {
+  padding: calc(var(--cell) * 0.9);
+  margin-top: var(--cell);
+  border-left: 2px solid var(--agent);
+}
+
+.verdict h2 {
+  margin-bottom: 0.4rem;
+}
+
+.verdict p {
+  margin: 0;
+  font-size: 13px;
+}
+
+/* --- designer ------------------------------------------------------------- */
+
+.designer {
+  margin-top: calc(var(--cell) * 1.5);
+}
+
+.designer-frame {
+  margin-top: var(--cell);
+  display: inline-block;
+}
+
+.notice {
+  margin: var(--cell) 0 0;
+  padding: 0.75rem 1rem;
+  font-size: 13px;
+  border-radius: 2px;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+}
+
+.notice-problem {
+  border-left: 2px solid var(--food);
+}
+
+.notice-outcome {
+  border-left: 2px solid var(--agent);
+}

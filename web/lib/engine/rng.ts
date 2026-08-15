@@ -33,7 +33,11 @@ export class Rng {
       state = nextState;
     }
 
-    if (words.every((word) => word === 0)) {
+    // OR the words rather than `every(w => w === 0)`: that form is a type
+    // predicate, so TypeScript narrows `words` to `0[]` inside the branch and
+    // rejects the replacement constants.
+    const allZero = words.reduce((accumulator, word) => accumulator | word, 0) === 0;
+    if (allZero) {
       words.splice(0, 4, 0x9e3779b9, 0x243f6a88, 0xb7e15162, 0x85a308d3);
     }
 
